@@ -2,8 +2,3 @@ pandas
 numpy
 sib-api-v3-sdk
 python-dotenv
-requests
-woocommerce
-gspread
-google-api-python-client
-google-auth

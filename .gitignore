@@ -216,3 +216,21 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ==========================================
+# 🛑 PROJET DONNÉES & API (AJOUTS DÉDIÉS)
+# ==========================================
+
+# Ignorer tous les fichiers de données (Données clients WooCommerce / Brevo)
+*.csv
+*.xlsx
+*.xls
+*.json
+
+# Exception : Conserver un éventuel fichier JSON de configuration non-sensible (optionnel)
+# !config.json
+
+# Fichiers système Mac (Invisibles générés par le Finder)
+.DS_Store
+.DS_Store?
+._*

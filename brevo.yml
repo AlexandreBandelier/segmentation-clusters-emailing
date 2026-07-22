@@ -1,0 +1,31 @@
+name: Synchronisation Brevo - Fichier 03
+
+on:
+  schedule:
+    # S'exécute chaque nuit à 3h00 du matin (UTC)
+    - cron: '0 3 * * *'
+  # Permet aussi de déclencher le script manuellement depuis GitHub
+  workflow_dispatch:
+
+jobs:
+  run-sync-brevo:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Récupérer le code du dépôt
+        uses: actions/checkout@v4
+
+      - name: Configurer Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Installer les dépendances
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas numpy sib-api-v3-sdk python-dotenv
+
+      - name: Exécuter le script de synchronisation Brevo
+        env:
+          BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+        run: python 03_synchronisation__brevo.py

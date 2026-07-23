@@ -31,7 +31,7 @@ jobs:
       # 4. Télécharge temporairement le CSV depuis Google Drive grâce à l'ID secret
       - name: Télécharger le CSV depuis Google Drive
         run: |
-          gdown --id ${{ secrets.DRIVE_FILE_ID }} -O donnees_segmentation_profonde.csv
+          gdown ${{ secrets.DRIVE_FILE_ID }} -O donnees_segmentation_profonde.csv --fuzzy
 
       # 5. Exécute le script Python avec la clé API Brevo
       - name: Exécuter le script de synchronisation Brevo

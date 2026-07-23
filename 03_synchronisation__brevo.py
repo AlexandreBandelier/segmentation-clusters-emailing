@@ -14,7 +14,7 @@ output_csv = "donnees_segmentation_profonde.csv"
 if drive_file_id:
     print(f"Téléchargement du fichier CSV depuis Google Drive (ID: {drive_file_id})...")
     url = f"https://drive.google.com/uc?id={drive_file_id}"
-    gdown.download(url, output_csv, quiet=False, fuzzy=True)
+    gdown.download(url, output_csv, quiet=False)
 else:
     print("Attention : Aucune variable DRIVE_FILE_ID détectée. Utilisation du fichier local.")
 # ------------------------------------------

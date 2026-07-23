@@ -1,11 +1,10 @@
-import pandas as pd
-import numpy as np
 import os
 import time
+import pandas as pd
+import numpy as np
 import sib_api_v3_sdk
 from sib_api_v3_sdk.rest import ApiException
 from dotenv import load_dotenv
-import os
 import gdown
 
 # --- TELECHARGEMENT DEPUIS GOOGLE DRIVE ---
@@ -46,7 +45,7 @@ if os.path.exists(chemin_entree_local):
 elif os.path.exists(chemin_entree_drive):
     chemin_entree = chemin_entree_drive
 else:
-    chemin_entree = chemin_entree_local  # Utilise le chemin local par défaut pour lever l'exception avec détails
+    chemin_entree = chemin_entree_local  # Utilise le chemin local par défaut
 
 if not os.path.exists(chemin_entree):
     raise FileNotFoundError(
@@ -91,6 +90,41 @@ for idx, row in df_clients.iterrows():
     segment = str(row['Segment_Metier']).strip() if 'Segment_Metier' in row and not pd.isna(row['Segment_Metier']) else ''
     cluster = int(row['Deep_Cluster']) if 'Deep_Cluster' in row and not pd.isna(row['Deep_Cluster']) else -1
     
-    # Données RFM nettoyées
+    # Données RFM nettoyées (corrige la ligne coupée)
     recence = int(row['Recence_Clean']) if 'Recence_Clean' in row and not pd.isna(row['Recence_Clean']) else 999
-    frequence = int(row['Frequence_Clean']) if 'Frequence_Clean' in row and not pd.isna(row
+    frequence = int(row['Frequence_Clean']) if 'Frequence_Clean' in row and not pd.isna(row['Frequence_Clean']) else 0
+    montant = float(row['Montant_Clean']) if 'Montant_Clean' in row and not pd.isna(row['Montant_Clean']) else 0.0
+
+    # Construction du dictionnaire d'attributs pour Brevo
+    attributes = {
+        "TUNNEL_MARKETING": tunnel,
+        "SEGMENT_METIER": segment,
+        "DEEP_CLUSTER": cluster,
+        "RECENCE": recence,
+        "FREQUENCE": frequence,
+        "MONTANT": montant
+    }
+
+    # Préparation du contact Brevo
+    create_contact = sib_api_v3_sdk.CreateContact(
+        email=email,
+        attributes=attributes,
+        update_enabled=True  # Met à jour le contact s'il existe déjà dans Brevo
+    )
+
+    try:
+        api_instance.create_contact(create_contact)
+        compteur_succes += 1
+        if (idx + 1) % 50 == 0 or (idx + 1) == total_contacts:
+            print(f"[+] Progression : {idx+1}/{total_contacts} contacts traités.")
+    except ApiException as e:
+        print(f"[!] Erreur API Brevo pour {email} (Ligne {idx+1}) : {e.reason}")
+        compteur_erreur += 1
+
+    # Pause très courte pour respecter les limites de rate-limit de l'API Brevo
+    time.sleep(0.05)
+
+# --- 4. BILAN DE LA SYNCHRONISATION ---
+print("\n" + "="*50)
+print(f"SYNCHRONISATION TERMINÉE : {compteur_succes} mis à jour / {compteur_erreur} erreurs")
+print("="*50)

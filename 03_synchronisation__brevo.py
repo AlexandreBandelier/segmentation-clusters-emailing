@@ -95,16 +95,15 @@ for idx, row in df_clients.iterrows():
     try:
         api_instance.create_contact(create_contact)
         compteur_succes += 1
-        erreurs_consecutives = 0  # Réinitialise le compteur d'erreurs en cas de succès
+        erreurs_consecutives = 0
         if (idx + 1) % 50 == 0 or (idx + 1) == total_contacts:
             print(f"[+] Progression : {idx+1}/{total_contacts} contacts traités.")
-   except ApiException as e:
+    except ApiException as e:
         print(f"[!] Erreur API Brevo pour {email} (Ligne {idx+1}) : {e.status} - {e.reason}")
-        print(f"👉 DÉTAIL BREVO : {e.body}")  # Affiche le vrai message renvoyé par Brevo
+        print(f"👉 DÉTAIL BREVO : {e.body}")
         compteur_erreur += 1
         erreurs_consecutives += 1
         
-        # STOP DE SÉCURITÉ SI L'API REJETTE LES REQUÊTES EN BOUCLE
         if erreurs_consecutives >= 5:
             print("\n❌ ERREUR CRITIQUE : 5 échecs consécutifs d'authentification (Unauthorized).")
             print("Arret du script pour éviter de boucler inutilement.")

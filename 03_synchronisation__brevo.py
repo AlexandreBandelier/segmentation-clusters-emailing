@@ -98,8 +98,9 @@ for idx, row in df_clients.iterrows():
         erreurs_consecutives = 0  # Réinitialise le compteur d'erreurs en cas de succès
         if (idx + 1) % 50 == 0 or (idx + 1) == total_contacts:
             print(f"[+] Progression : {idx+1}/{total_contacts} contacts traités.")
-    except ApiException as e:
-        print(f"[!] Erreur API Brevo pour {email} (Ligne {idx+1}) : {e.reason}")
+   except ApiException as e:
+        print(f"[!] Erreur API Brevo pour {email} (Ligne {idx+1}) : {e.status} - {e.reason}")
+        print(f"👉 DÉTAIL BREVO : {e.body}")  # Affiche le vrai message renvoyé par Brevo
         compteur_erreur += 1
         erreurs_consecutives += 1
         

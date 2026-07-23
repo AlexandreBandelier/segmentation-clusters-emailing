@@ -5,6 +5,20 @@ import time
 import sib_api_v3_sdk
 from sib_api_v3_sdk.rest import ApiException
 from dotenv import load_dotenv
+import os
+import gdown
+
+# --- TELECHARGEMENT DEPUIS GOOGLE DRIVE ---
+drive_file_id = os.environ.get("DRIVE_FILE_ID")
+output_csv = "donnees_segmentation_profonde.csv"
+
+if drive_file_id:
+    print(f"Téléchargement du fichier CSV depuis Google Drive (ID: {drive_file_id})...")
+    url = f"https://drive.google.com/uc?id={drive_file_id}"
+    gdown.download(url, output_csv, quiet=False, fuzzy=True)
+else:
+    print("Attention : Aucune variable DRIVE_FILE_ID détectée. Utilisation du fichier local.")
+# ------------------------------------------
 
 # --- 1. CONFIGURATION DES CHEMINS ET DE L'API ---
 dossier_actuel = os.path.dirname(os.path.abspath(__file__))

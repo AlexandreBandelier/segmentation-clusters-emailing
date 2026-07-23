@@ -2,9 +2,7 @@ name: Synchronisation Brevo - Fichier 03
 
 on:
   schedule:
-    # S'exécute automatiquement chaque nuit à 3h00 (Heure UTC)
     - cron: '0 3 * * *'
-  # Permet le lancement manuel
   workflow_dispatch:
 
 jobs:
@@ -25,11 +23,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install pandas numpy sib-api-v3-sdk python-dotenv gdown
 
-      - name: Télécharger le CSV depuis Google Drive
-        run: |
-          gdown ${{ secrets.DRIVE_FILE_ID }} -O donnees_segmentation_profonde.csv --fuzzy
-
       - name: Exécuter le script de synchronisation Brevo
         env:
           BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+          DRIVE_FILE_ID: ${{ secrets.DRIVE_FILE_ID }}
         run: python 03_synchronisation__brevo.py

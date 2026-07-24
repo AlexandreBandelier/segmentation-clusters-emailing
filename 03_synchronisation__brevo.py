@@ -42,7 +42,7 @@ if not CLE_API_BREVO:
 
 # DIAGNOSTIC DE LA CLÉ
 cle_masquee = CLE_API_BREVO[:6] + "..." + CLE_API_BREVO[-4:] if len(CLE_API_BREVO) > 10 else "TROP COURTE"
-print(f"🔑 DIAGNOSTIC : Clé injectée = {cle_masquee} | Longueur = {len(CLE_API_BREVO)} caractères.")
+print(f"DIAGNOSTIC : Clé injectée = {cle_masquee} | Longueur = {len(CLE_API_BREVO)} caractères.")
 
 print("Étape 1 : Initialisation et connexion à l'API Brevo...")
 configuration = sib_api_v3_sdk.Configuration()
@@ -80,7 +80,7 @@ for idx, row in df_clients.iterrows():
     attributes = {
         "TUNNEL_MARKETING": tunnel,
         "SEGMENT_METIER": segment,
-        "DEEP_CLUSTER": cluster,
+        "CLUSTER_ID": cluster,
         "RECENCE": recence,
         "FREQUENCE": frequence,
         "MONTANT": montant
@@ -100,12 +100,12 @@ for idx, row in df_clients.iterrows():
             print(f"[+] Progression : {idx+1}/{total_contacts} contacts traités.")
     except ApiException as e:
         print(f"[!] Erreur API Brevo pour {email} (Ligne {idx+1}) : {e.status} - {e.reason}")
-        print(f"👉 DÉTAIL BREVO : {e.body}")
+        print(f"DÉTAIL BREVO : {e.body}")
         compteur_erreur += 1
         erreurs_consecutives += 1
         
         if erreurs_consecutives >= 5:
-            print("\n❌ ERREUR CRITIQUE : 5 échecs consécutifs d'authentification (Unauthorized).")
+            print("\n ERREUR CRITIQUE : 5 échecs consécutifs d'authentification (Unauthorized).")
             print("Arret du script pour éviter de boucler inutilement.")
             sys.exit(1)
 

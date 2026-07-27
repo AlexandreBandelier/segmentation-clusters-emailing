@@ -28,16 +28,14 @@ def telecharger_drive(drive_id, chemin_dest):
   """Télécharge un fichier Google Drive en forçant l'export CSV si c'est un Google Sheet."""
   if not drive_id:
     return
-  # Lien d'export CSV universel pour Google Sheets
   url_csv = (
       f'https://docs.google.com/spreadsheets/d/{drive_id}/export?format=csv'
   )
   try:
-    gdown.download(url_csv, chemin_dest, quiet=False, fuzzy=True)
+    gdown.download(url_csv, chemin_dest, quiet=False)
   except Exception:
-    # Fallback sur le lien standard si ce n'est pas un Google Sheet
     url_standard = f'https://drive.google.com/uc?id={drive_id}'
-    gdown.download(url_standard, chemin_dest, quiet=False, fuzzy=True)
+    gdown.download(url_standard, chemin_dest, quiet=False)
 
 
 telecharger_drive(drive_id_rfm, chemin_rfm)

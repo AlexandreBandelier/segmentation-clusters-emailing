@@ -1,27 +1,34 @@
 import os
 import numpy as np
 import pandas as pd
+import gdown
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 
-# --- 1. CONFIGURATION DES CHEMINS ET DES FICHIERS ---
+# --- 1. CONFIGURATION DES CHEMINS ET TELECHARGEMENT DRIVE ---
 dossier_actuel = os.path.dirname(os.path.abspath(__file__))
 
-chemin_rfm = os.path.join(
-    dossier_actuel,
-    'donnees_boutique_propres_interne - donnees_boutique_propres_interne.csv',
-)
-chemin_transactions = os.path.join(
-    dossier_actuel,
-    'export-des-commandes-2018-13_07_2026 (sans .xlsx - Sans note du client.csv',
-)
+chemin_rfm = os.path.join(dossier_actuel, 'donnees_boutique_propres_interne.csv')
+chemin_transactions = os.path.join(dossier_actuel, 'export_commandes.csv')
 chemin_produits = os.path.join(dossier_actuel, 'export_produits_KGI.csv')
-chemin_sortie_profonde = os.path.join(
-    dossier_actuel, 'donnees_segmentation_profonde.csv'
-)
+chemin_sortie_profonde = os.path.join(dossier_actuel, 'donnees_segmentation_profonde.csv')
 
-print('Étape 1 : Chargement de vos fichiers de données...')
+# Téléchargement des fichiers sources depuis Google Drive si les ID sont fournis
+drive_id_rfm = os.environ.get("DRIVE_ID_RFM")
+drive_id_trans = os.environ.get("DRIVE_ID_TRANS")
+drive_id_prod = os.environ.get("DRIVE_ID_PROD")
+
+print("Étape 1 : Téléchargement et chargement des données depuis Google Drive...")
+
+if drive_id_rfm:
+    gdown.download(f"https://drive.google.com/uc?id={drive_id_rfm}", chemin_rfm, quiet=False)
+if drive_id_trans:
+    gdown.download(f"https://drive.google.com/uc?id={drive_id_trans}", chemin_transactions, quiet=False)
+if drive_id_prod:
+    gdown.download(f"https://drive.google.com/uc?id={drive_id_prod}", chemin_produits, quiet=False)
+
+# Chargement des DataFrames
 df_rfm = pd.read_csv(chemin_rfm, low_memory=False)
 df_trans = pd.read_csv(chemin_transactions, low_memory=False)
 df_prod = pd.read_csv(chemin_produits, low_memory=False)

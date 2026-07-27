@@ -22,6 +22,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install pandas numpy scikit-learn sib-api-v3-sdk gdown python-dotenv
+          pip install pandas numpy scikit-learn sib-api-v3-sdk gdown python-dotenv openpyxl
 
       - name: 4. Exécuter la Segmentation Profonde (Script 02)
         env:

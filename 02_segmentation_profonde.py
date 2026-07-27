@@ -12,26 +12,58 @@ dossier_actuel = os.path.dirname(os.path.abspath(__file__))
 chemin_rfm = os.path.join(dossier_actuel, 'donnees_boutique_propres_interne.csv')
 chemin_transactions = os.path.join(dossier_actuel, 'export_commandes.csv')
 chemin_produits = os.path.join(dossier_actuel, 'export_produits_KGI.csv')
-chemin_sortie_profonde = os.path.join(dossier_actuel, 'donnees_segmentation_profonde.csv')
+chemin_sortie_profonde = os.path.join(
+    dossier_actuel, 'donnees_segmentation_profonde.csv'
+)
 
 # Téléchargement des fichiers sources depuis Google Drive si les ID sont fournis
-drive_id_rfm = os.environ.get("DRIVE_ID_RFM")
-drive_id_trans = os.environ.get("DRIVE_ID_TRANS")
-drive_id_prod = os.environ.get("DRIVE_ID_PROD")
+drive_id_rfm = os.environ.get('DRIVE_ID_RFM')
+drive_id_trans = os.environ.get('DRIVE_ID_TRANS')
+drive_id_prod = os.environ.get('DRIVE_ID_PROD')
 
-print("Étape 1 : Téléchargement et chargement des données depuis Google Drive...")
+print('Étape 1 : Téléchargement et chargement des données depuis Google Drive...')
 
-if drive_id_rfm:
-    gdown.download(f"https://drive.google.com/uc?id={drive_id_rfm}", chemin_rfm, quiet=False)
-if drive_id_trans:
-    gdown.download(f"https://drive.google.com/uc?id={drive_id_trans}", chemin_transactions, quiet=False)
-if drive_id_prod:
-    gdown.download(f"https://drive.google.com/uc?id={drive_id_prod}", chemin_produits, quiet=False)
+
+def telecharger_drive(drive_id, chemin_dest):
+  """Télécharge un fichier Google Drive en forçant l'export CSV si c'est un Google Sheet."""
+  if not drive_id:
+    return
+  # Lien d'export CSV universel pour Google Sheets
+  url_csv = (
+      f'https://docs.google.com/spreadsheets/d/{drive_id}/export?format=csv'
+  )
+  try:
+    gdown.download(url_csv, chemin_dest, quiet=False, fuzzy=True)
+  except Exception:
+    # Fallback sur le lien standard si ce n'est pas un Google Sheet
+    url_standard = f'https://drive.google.com/uc?id={drive_id}'
+    gdown.download(url_standard, chemin_dest, quiet=False, fuzzy=True)
+
+
+telecharger_drive(drive_id_rfm, chemin_rfm)
+telecharger_drive(drive_id_trans, chemin_transactions)
+telecharger_drive(drive_id_prod, chemin_produits)
+
+
+def charger_fichier(chemin):
+  """Charge un fichier qu'il soit au format CSV brut ou Excel/Google Sheet."""
+  try:
+    return pd.read_csv(chemin, low_memory=False)
+  except Exception:
+    try:
+      return pd.read_excel(chemin)
+    except Exception as e:
+      raise Exception(
+          f"Impossible de lire le fichier '{chemin}'. Vérifiez son format ou son"
+          f' contenu. Détails : {e}'
+      )
+
 
 # Chargement des DataFrames
-df_rfm = pd.read_csv(chemin_rfm, low_memory=False)
-df_trans = pd.read_csv(chemin_transactions, low_memory=False)
-df_prod = pd.read_csv(chemin_produits, low_memory=False)
+df_rfm = charger_fichier(chemin_rfm)
+df_trans = charger_fichier(chemin_transactions)
+df_prod = charger_fichier(chemin_produits)
+
 
 # --- 2. HARMONISATION DE L'EMAIL ---
 print('Étape 2 : Harmonisation des adresses e-mails...')

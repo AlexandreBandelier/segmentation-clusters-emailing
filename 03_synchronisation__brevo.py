@@ -4,17 +4,17 @@ import time
 from dotenv import load_dotenv
 import numpy as np
 import pandas as pd
-from sib_api_v3_sdk.rest import ApiException
 import sib_api_v3_sdk
+from sib_api_v3_sdk.rest import ApiException
 
 # --- 1. CONFIGURATION DES CHEMINS ET DE L'API ---
 dossier_actuel = os.path.dirname(os.path.abspath(__file__))
 
 chemin_env = os.path.join(dossier_actuel, '.env')
 if os.path.exists(chemin_env):
-  load_dotenv(chemin_env)
+    load_dotenv(chemin_env)
 else:
-  load_dotenv()
+    load_dotenv()
 
 # Le script 03 lit DIRECTEMENT le fichier local généré par le script 02
 chemin_entree = os.path.join(
@@ -22,19 +22,19 @@ chemin_entree = os.path.join(
 )
 
 if not os.path.exists(chemin_entree):
-  raise FileNotFoundError(
-      f"Erreur : Le fichier '{chemin_entree}' est introuvable. Exécutez le"
-      ' script 02 d\'abord.'
-  )
+    raise FileNotFoundError(
+        f"Erreur : Le fichier '{chemin_entree}' est introuvable. Exécutez le"
+        " script 02 d'abord."
+    )
 
 # RÉCUPÉRATION DE LA CLÉ API BREVO
 CLE_API_BREVO = os.getenv('BREVO_API_KEY')
 
 if not CLE_API_BREVO:
-  raise ValueError(
-      "Erreur : La variable 'BREVO_API_KEY' est introuvable (ni dans le .env, ni"
-      ' dans les Secrets GitHub).'
-  )
+    raise ValueError(
+        "Erreur : La variable 'BREVO_API_KEY' est introuvable (ni dans le .env, ni"
+        " dans les Secrets GitHub)."
+    )
 
 # DIAGNOSTIC DE LA CLÉ
 cle_masquee = (
@@ -68,81 +68,85 @@ compteur_erreur = 0
 erreurs_consecutives = 0
 
 for idx, row in df_clients.iterrows():
-  email = str(row['Email']).strip() if not pd.isna(row['Email']) else ''
+    email = str(row['Email']).strip() if not pd.isna(row['Email']) else ''
 
-  if email == '' or '@' not in email:
-    compteur_erreur += 1
-    continue
+    if email == '' or '@' not in email:
+        compteur_erreur += 1
+        continue
 
-  tunnel = (
-      str(row['Tunnel_Marketing']).strip()
-      if 'Tunnel_Marketing' in row and not pd.isna(row['Tunnel_Marketing'])
-      else ''
-  )
-  segment = (
-      str(row['Segment_Metier']).strip()
-      if 'Segment_Metier' in row and not pd.isna(row['Segment_Metier'])
-      else ''
-  )
-  cluster = (
-      int(row['Deep_Cluster'])
-      if 'Deep_Cluster' in row and not pd.isna(row['Deep_Cluster'])
-      else -1
-  )
-
-  recence = (
-      int(row['Recence_Clean'])
-      if 'Recence_Clean' in row and not pd.isna(row['Recence_Clean'])
-      else 999
-  )
-  frequence = (
-      int(row['Frequence_Clean'])
-      if 'Frequence_Clean' in row and not pd.isna(row['Frequence_Clean'])
-      else 0
-  )
-  montant = (
-      float(row['Montant_Clean'])
-      if 'Montant_Clean' in row and not pd.isna(row['Montant_Clean'])
-      else 0.0
-  )
-
-  attributes = {
-      'TUNNEL_MARKETING': tunnel,
-      'SEGMENT_METIER': segment,
-      'CLUSTER_ID': cluster,
-      'RECENCE': recence,
-      'FREQUENCE': frequence,
-      'MONTANT': montant,
-  }
-
-  create_contact = sib_api_v3_sdk.CreateContact(
-      email=email, attributes=attributes, update_enabled=True
-  )
-
-  try:
-    api_instance.create_contact(create_contact)
-    compteur_succes += 1
-    erreurs_consecutives = 0
-    if (idx + 1) % 50 == 0 or (idx + 1) == total_contacts:
-      print(f'[+] Progression : {idx+1}/{total_contacts} contacts traités.')
-  except ApiException as e:
-    print(
-        f'[!] Erreur API Brevo pour {email} (Ligne {idx+1}) : {e.status} -'
-        f' {e.reason}'
+    tunnel = (
+        str(row['Tunnel_Marketing']).strip()
+        if 'Tunnel_Marketing' in row and not pd.isna(row['Tunnel_Marketing'])
+        else ''
     )
-    print(f'DÉTAIL BREVO : {e.body}')
-    compteur_erreur += 1
-    erreurs_consecutives += 1
+    segment = (
+        str(row['Segment_Metier']).strip()
+        if 'Segment_Metier' in row and not pd.isna(row['Segment_Metier'])
+        else ''
+    )
+    cluster = (
+        int(row['Deep_Cluster'])
+        if 'Deep_Cluster' in row and not pd.isna(row['Deep_Cluster'])
+        else -1
+    )
 
-    if erreurs_consecutives >= 5:
-      print(
-          '\n ERREUR CRITIQUE : 5 échecs consécutifs d\'authentification'
-          ' (Unauthorized).'
-      )
-      print('Arret du script pour éviter de boucler inutilement.')
-      sys.exit(1)
+    recence = (
+        int(row['Recence_Clean'])
+        if 'Recence_Clean' in row and not pd.isna(row['Recence_Clean'])
+        else 999
+    )
+    frequence = (
+        int(row['Frequence_Clean'])
+        if 'Frequence_Clean' in row and not pd.isna(row['Frequence_Clean'])
+        else 0
+    )
+    montant = (
+        float(row['Montant_Clean'])
+        if 'Montant_Clean' in row and not pd.isna(row['Montant_Clean'])
+        else 0.0
+    )
 
-  time.sleep(0.05)
+    attributes = {
+        'TUNNEL_MARKETING': tunnel,
+        'SEGMENT_METIER': segment,
+        'CLUSTER_ID': cluster,
+        'RECENCE': recence,
+        'FREQUENCE': frequence,
+        'MONTANT': montant,
+    }
+
+    # CORRECTIF TEMPORAIRE : Réinscription automatique de tous les contacts touchés
+    create_contact = sib_api_v3_sdk.CreateContact(
+        email=email,
+        attributes=attributes,
+        email_blacklisted=False,  # CORRIGE ET RÉABONNE AUTOMATIQUEMENT
+        update_enabled=True
+    )
+
+    try:
+        api_instance.create_contact(create_contact)
+        compteur_succes += 1
+        erreurs_consecutives = 0
+        if (idx + 1) % 50 == 0 or (idx + 1) == total_contacts:
+            print(f'[+] Progression : {idx+1}/{total_contacts} contacts traités.')
+    except ApiException as e:
+        print(
+            f'[!] Erreur API Brevo pour {email} (Ligne {idx+1}) : {e.status} -'
+            f' {e.reason}'
+        )
+        print(f'DÉTAIL BREVO : {e.body}')
+        compteur_erreur += 1
+        erreurs_consecutives += 1
+
+        if erreurs_consecutives >= 5:
+            print(
+                '\n ERREUR CRITIQUE : 5 échecs consécutifs d\'authentification'
+                ' (Unauthorized).'
+            )
+            print('Arret du script pour éviter de boucler inutilement.')
+            sys.exit(1)
+
+    time.sleep(0.05)
 
 print('\n' + '=' * 50)
 print(

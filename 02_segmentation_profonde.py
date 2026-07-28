@@ -39,50 +39,113 @@ def charger_fichier(chemin):
 df_rfm = charger_fichier(chemin_rfm)
 df_trans = charger_fichier(chemin_transactions)
 
-# --- 2. NETTOYAGE STRICT ET SÉCURISATION DES PRODUITS ---
+# --- 2. NETTOYAGE STRICT ET EXTRACTION CATÉGORIE / PRODUIT ---
 def normaliser_texte(texte):
     if pd.isna(texte): return ""
     texte = str(texte).lower()
     texte = unicodedata.normalize('NFD', texte).encode('ascii', 'ignore').decode('utf-8')
     return texte
 
+# Détection dynamique des colonnes Produit, Catégorie et Email
 col_prod_trans = next((c for c in df_trans.columns if any(k in c.lower() for k in ['nom', 'produit', 'item', 'lineitem'])), df_trans.columns[0])
+col_cat_trans = next((c for c in df_trans.columns if any(k in c.lower() for k in ['categorie', 'category', 'cat'])), None)
 col_email_trans = next((c for c in df_trans.columns if 'email' in c.lower() or 'mail' in c.lower()), df_trans.columns[0])
 
 df_trans['Email_Clean'] = df_trans[col_email_trans].astype(str).str.strip().str.lower()
 df_trans['Produit_Clean'] = df_trans[col_prod_trans].apply(normaliser_texte)
+df_trans['Categorie_Clean'] = df_trans[col_cat_trans].apply(normaliser_texte) if col_cat_trans else ""
 
-# --- 3. DÉTECTION DES PRODUITS (UNIQUEMENT SUR LE NOM DU PRODUIT) ---
+# --- 3. DÉTECTION PAR CATÉGORIES ET MOTS-CLÉS ---
 
-MOTS_KUMITE = ['kumite', 'protection', 'plastron', 'gant', 'patte d\'ours', 'pattes d\'ours', 'bouclier', 'casque', 'protege-dent', 'protege dent', 'protege-tibia', 'protege tibia', 'coque']
+# --- 3. DÉTECTION DES PRODUITS (DICTIONNAIRES ULTRA-ENRICHIS SANS ACCENTS) ---
 
-EXCLUSIONS_ELITE = ['kodomo', 'shoshin', 'bicolore', 'blanche', 'jaune', 'orange', 'verte', 'bleue', 'marron', 'junior', 'enfant', 'initiation']
-MOTS_ELITE = ['wkf', 'master', 'ceinture noire', 'ceinture rouge et blanche', 'ceinture rouge/blanche', 'kata', 'tokyodo', 'hirota', 'seishin', 'expert']
-
-EXCLUSIONS_DEBUTANT = ['ceinture noire', 'ceinture rouge et blanche', 'ceinture rouge/blanche', 'wkf', 'master', 'expert', 'tokyodo', 'hirota', 'seishin']
-MOTS_DEBUTANT = [
-    'kodomo', 'shoshin', 'initiation', 'debutant', 'ceinture blanche', 'ceinture jaune', 
-    'ceinture orange', 'ceinture verte', 'ceinture bicolore', '100cm', '110cm', '120cm', '130cm', '140cm'
+# TUNNEL KUMITE / COMBAT
+MOTS_KUMITE = [
+    'kumite', 'combat', 'combattant', 'protection', 'plastron', 'plastron femme', 
+    'poitrine', 'buste', 'gant', 'gants', 'patte d\'ours', 'pattes d\'ours', 
+    'bouclier', 'casque', 'masque', 'coque', 'coquille', 'pitaine', 'pitaines', 
+    'mitaine', 'mitaines', 'protege dent', 'protege dents', 'protege-dent', 
+    'protege-dents', 'protegedent', 'protege tibia', 'tibia', 'dents', 'protege-tibia', 'protegetibia', 
+    'tibias-pieds', 'tibia-pied', 'protege pied', 'chevillere', 'karate gi kumite', 
+    'red belt', 'blue belt', 'reversible', 'cible', 'cibles', 'pao', 'paos', 
+    'frappe', 'sac de frappe', 'mannequin'
 ]
 
-# POUR ENFANT : On cherche exclusivement du matériel enfant/junior dans le NOM DU PRODUIT
-MOTS_ENFANT = ['enfant', 'junior', 'kodomo', 'taille enfant', 'kimono enfant', 'protege-tibia enfant']
+# TUNNEL ÉLITE / EXPERT (Exclusions et Inclusions)
+EXCLUSIONS_ELITE = [
+    'kodomo', 'shoshin', 'bicolore', 'jaune', 'orange', 'verte', 'standard'
+    'marron', 'junior', 'enfant', 'initiation', 'ceinture blanche', 'debutant', 
+    'premier prix', 'eco', 'decouverte', 'entrainement', 'kids', 'baby', 
+    '100cm', '110cm', '120cm'
+]
 
-def analyser_achats_client(produits_liste):
-    texte_produits = " ".join(produits_liste)
-
-    is_kumite = any(m in texte_produits for m in MOTS_KUMITE)
+MOTS_ELITE = [
+    # Mots clés & Lexique
+    'master', 'grand master', 'expert', 'kata', 'competition', 'champion', 
+    'premium', 'sensei', 'coach', 'instructeur', 'dan', 'sur-mesure', 'broderie', 'brode',
     
-    has_elite_mot = any(m in texte_produits for m in MOTS_ELITE)
-    has_elite_excl = any(m in texte_produits for m in EXCLUSIONS_ELITE)
-    is_elite = has_elite_mot and not has_elite_excl
+    # Marques haut de gamme
+    'tokyodo', 'hirota', 'seishin', 'tokaido', 'shureido'
+    
+    # Ceintures & Tissus spécifiques
+    'ceinture noire', 'ceinture rouge et blanche', 'ceinture rouge/blanche', 
+    'soie', 'satin'
+]
 
+# TUNNEL DÉBUTANT (Exclusions et Inclusions)
+EXCLUSIONS_DEBUTANT = [
+    'ceinture noire', 'ceinture rouge et blanche', 'ceinture rouge/blanche', 
+    'master', 'expert', 'competition', 'champion', 'premium', 'sensei', 
+    'tokyodo', 'hirota', 'shureido'
+]
+
+MOTS_DEBUTANT = [
+    'kodomo', 'shoshin', 'initiation', 'debutant', 'debutants', 'decouverte', 
+    'premier prix', 'eco', 'entrainement', 'economique',
+    
+    # Ceintures d'apprentissage
+    'ceinture blanche', 'ceinture jaune', 'ceinture orange', 'ceinture verte', 
+    'ceinture bicolore', 'blanche/jaune', 'jaune/orange', 'orange/verte', 
+    'verte/bleue', 'bleue/marron', 'rouleau'
+]
+
+# TUNNEL ENFANT (Priorité stricte)
+# On exclut sciemment "benjamin" pour éviter le bug sur les prénoms de clients
+MOTS_ENFANT = [
+    'enfant', 'enfants', 'junior', 'kodomo', 'kids', 'baby', 'pupille', 'poussin', 
+    'minime', 'taille enfant', 'kimono enfant', '100cm', '110cm', '120cm', '130cm', '140cm', '150cm'
+]
+
+def analyser_achats_client(df_group):
+    produits_liste = df_group['Produit_Clean'].tolist()
+    categories_liste = df_group['Categorie_Clean'].tolist()
+    
+    texte_produits = " ".join(produits_liste)
+    texte_categories = " ".join(categories_liste)
+
+    # 1. ANALYSE ENFANT (Catégorie prioritaire OR Mots-clés)
+    cat_is_enfant = any(k in texte_categories for k in ['enfant', 'enfants', 'junior', 'kodomo'])
+    kw_is_enfant = any(m in texte_produits for m in MOTS_ENFANT)
+    is_enfant = cat_is_enfant or kw_is_enfant
+
+    # 2. ANALYSE DÉBUTANT (Catégorie prioritaire OR Mots-clés filtrés)
+    cat_is_debutant = any(k in texte_categories for k in ['debutant', 'debutants', 'initiation', 'shoshin'])
     has_deb_mot = any(m in texte_produits for m in MOTS_DEBUTANT)
     has_deb_excl = any(m in texte_produits for m in EXCLUSIONS_DEBUTANT)
-    is_debutant = has_deb_mot and not has_deb_excl
+    kw_is_debutant = has_deb_mot and not has_deb_excl
+    is_debutant = cat_is_debutant or kw_is_debutant
 
-    # Détection Enfant sécurisée
-    is_enfant = any(m in texte_produits for m in MOTS_ENFANT)
+    # 3. ANALYSE KUMITE
+    cat_is_kumite = any(k in texte_categories for k in ['kumite', 'protection', 'combat'])
+    kw_is_kumite = any(m in texte_produits for m in MOTS_KUMITE)
+    is_kumite = cat_is_kumite or kw_is_kumite
+
+    # 4. ANALYSE ÉLITE
+    cat_is_elite = any(k in texte_categories for k in ['expert', 'master', 'wkf'])
+    has_elite_mot = any(m in texte_produits for m in MOTS_ELITE)
+    has_elite_excl = any(m in texte_produits for m in EXCLUSIONS_ELITE)
+    kw_is_elite = has_elite_mot and not has_elite_excl
+    is_elite = cat_is_elite or kw_is_elite
 
     return pd.Series({
         'has_kumite': is_kumite,
@@ -91,7 +154,7 @@ def analyser_achats_client(produits_liste):
         'has_enfant': is_enfant
     })
 
-achats_par_client = df_trans.groupby('Email_Clean')['Produit_Clean'].apply(list).apply(analyser_achats_client)
+achats_par_client = df_trans.groupby('Email_Clean').apply(analyser_achats_client)
 
 # --- 4. PREPARATION RFM ET FUSION ---
 col_email_rfm = next((c for c in df_rfm.columns if 'email' in c.lower() or 'mail' in c.lower()), df_rfm.columns[0])
@@ -111,7 +174,7 @@ df['Frequence_Clean'] = pd.to_numeric(df[col_orders], errors='coerce').fillna(0)
 df['Montant_Clean'] = pd.to_numeric(df[col_amount], errors='coerce').fillna(0.0).astype(float) if col_amount else 0.0
 df['Recence_Clean'] = pd.to_numeric(df[col_recency], errors='coerce').fillna(999).astype(int) if col_recency else 999
 
-# --- 5. RÈGLES DE SEGMENTATION STRICTES ---
+# --- 5. RÈGLES DE SEGMENTATION AVEC PRIORITÉ ENFANT SUR DÉBUTANT ---
 def attribuer_segmentation(row):
     freq = row['Frequence_Clean']
     montant = row['Montant_Clean']
@@ -137,19 +200,19 @@ def attribuer_segmentation(row):
         cluster_id = 5
         rfm_label = "Inactif / Risque d'Attrition"
 
-    # Attribution du Tunnel Marketing
+    # Attribution du Tunnel Marketing (L'Enfant passe AVANT Débutant)
     if row['has_kumite']:
         tunnel = 'tunnel_kumite'
         segment_metier = 'Passionné Kumite'
     elif row['has_elite']:
         tunnel = 'tunnel_elite_pro'
         segment_metier = 'Expert / Élite Pro'
-    elif row['has_debutant']:
-        tunnel = 'tunnel_debutant'
-        segment_metier = 'Initiation / Débutant'
-    elif row['has_enfant']:
+    elif row['has_enfant']:  # PRIORITÉ ENFANT
         tunnel = 'tunnel_enfant'
         segment_metier = 'Équipement Enfant'
+    elif row['has_debutant']:  # DÉBUTANT (Si pas enfant)
+        tunnel = 'tunnel_debutant'
+        segment_metier = 'Initiation / Débutant'
     elif cluster_id == 0:
         tunnel = 'tunnel_prospect_sans_achat'
         segment_metier = 'Prospect Non Converti'

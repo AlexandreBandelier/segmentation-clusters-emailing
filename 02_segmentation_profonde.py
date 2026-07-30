@@ -55,11 +55,9 @@ df_trans['Email_Clean'] = df_trans[col_email_trans].astype(str).str.strip().str.
 df_trans['Produit_Clean'] = df_trans[col_prod_trans].apply(normaliser_texte)
 df_trans['Categorie_Clean'] = df_trans[col_cat_trans].apply(normaliser_texte) if col_cat_trans else ""
 
-# --- 3. DÉTECTION PAR CATÉGORIES ET MOTS-CLÉS ---
+# --- 3. DÉTECTION DES PRODUITS ET CATÉGORIES (SANS ACCENTS) ---
 
-# --- 3. DÉTECTION DES PRODUITS (DICTIONNAIRES ULTRA-ENRICHIS SANS ACCENTS) ---
-
-# TUNNEL KUMITE / COMBAT
+# KUMITE / COMBAT
 MOTS_KUMITE = [
     'kumite', 'combat', 'combattant', 'protection', 'plastron', 'plastron femme', 
     'poitrine', 'buste', 'gant', 'gants', 'patte d\'ours', 'pattes d\'ours', 
@@ -71,28 +69,22 @@ MOTS_KUMITE = [
     'frappe', 'sac de frappe', 'mannequin'
 ]
 
-# TUNNEL ÉLITE / EXPERT (Exclusions et Inclusions)
-EXCLUSIONS_ELITE = [
-    'kodomo', 'shoshin', 'bicolore', 'jaune', 'orange', 'verte', 'standard'
+# KATA / ÉLITE
+EXCLUSIONS_KATA = [
+    'kodomo', 'shoshin', 'bicolore', 'jaune', 'orange', 'verte', 'standard',
     'marron', 'junior', 'enfant', 'initiation', 'ceinture blanche', 'debutant', 
     'premier prix', 'eco', 'decouverte', 'entrainement', 'kids', 'baby', 
     '100cm', '110cm', '120cm'
 ]
 
-MOTS_ELITE = [
-    # Mots clés & Lexique
+MOTS_KATA = [
     'master', 'grand master', 'expert', 'kata', 'competition', 'champion', 
     'premium', 'sensei', 'coach', 'instructeur', 'dan', 'sur-mesure', 'broderie', 'brode',
-    
-    # Marques haut de gamme
-    'tokyodo', 'hirota', 'seishin', 'tokaido', 'shureido'
-    
-    # Ceintures & Tissus spécifiques
-    'ceinture noire', 'ceinture rouge et blanche', 'ceinture rouge/blanche', 
-    'soie', 'satin'
+    'tokyodo', 'hirota', 'seishin', 'tokaido', 'shureido',
+    'ceinture noire', 'ceinture rouge et blanche', 'ceinture rouge/blanche', 'soie', 'satin'
 ]
 
-# TUNNEL DÉBUTANT (Exclusions et Inclusions)
+# DÉBUTANT
 EXCLUSIONS_DEBUTANT = [
     'ceinture noire', 'ceinture rouge et blanche', 'ceinture rouge/blanche', 
     'master', 'expert', 'competition', 'champion', 'premium', 'sensei', 
@@ -100,17 +92,13 @@ EXCLUSIONS_DEBUTANT = [
 ]
 
 MOTS_DEBUTANT = [
-    'kodomo', 'shoshin', 'initiation', 'debutant', 'debutants', 'decouverte', 
-    'premier prix', 'eco', 'entrainement', 'economique',
-    
-    # Ceintures d'apprentissage
-    'ceinture blanche', 'ceinture jaune', 'ceinture orange', 'ceinture verte', 
+    'shoshin', 'initiation', 'debutant', 'debutants', 'decouverte', 
+    'premier prix', 'eco', 'economique',
     'ceinture bicolore', 'blanche/jaune', 'jaune/orange', 'orange/verte', 
-    'verte/bleue', 'bleue/marron', 'rouleau'
+    'verte/bleue', 'bleue/marron'
 ]
 
-# TUNNEL ENFANT (Priorité stricte)
-# On exclut sciemment "benjamin" pour éviter le bug sur les prénoms de clients
+# ENFANT
 MOTS_ENFANT = [
     'enfant', 'enfants', 'junior', 'kodomo', 'kids', 'baby', 'pupille', 'poussin', 
     'minime', 'taille enfant', 'kimono enfant', '100cm', '110cm', '120cm', '130cm', '140cm', '150cm'
@@ -123,35 +111,43 @@ def analyser_achats_client(df_group):
     texte_produits = " ".join(produits_liste)
     texte_categories = " ".join(categories_liste)
 
-    # 1. ANALYSE ENFANT (Catégorie prioritaire OR Mots-clés)
+    # Détection des catégories spécifiques d'arts martiaux
+    is_yoseikan = 'yoseikan' in texte_categories or 'yoseikan' in texte_produits
+    is_nanbudo = 'nanbudo' in texte_categories or 'nanbudo' in texte_produits
+    is_kobudo = 'kobudo' in texte_categories or 'kobudo' in texte_produits
+
+    # Détection Enfant
     cat_is_enfant = any(k in texte_categories for k in ['enfant', 'enfants', 'junior', 'kodomo'])
     kw_is_enfant = any(m in texte_produits for m in MOTS_ENFANT)
     is_enfant = cat_is_enfant or kw_is_enfant
 
-    # 2. ANALYSE DÉBUTANT (Catégorie prioritaire OR Mots-clés filtrés)
+    # Détection Kumite
+    cat_is_kumite = any(k in texte_categories for k in ['kumite', 'protection', 'combat'])
+    kw_is_kumite = any(m in texte_produits for m in MOTS_KUMITE)
+    is_kumite = cat_is_kumite or kw_is_kumite
+
+    # Détection Kata
+    cat_is_kata = any(k in texte_categories for k in ['expert', 'master', 'wkf', 'kata'])
+    has_kata_mot = any(m in texte_produits for m in MOTS_KATA)
+    has_kata_excl = any(m in texte_produits for m in EXCLUSIONS_KATA)
+    kw_is_kata = has_kata_mot and not has_kata_excl
+    is_kata = cat_is_kata or kw_is_kata
+
+    # Détection Débutant
     cat_is_debutant = any(k in texte_categories for k in ['debutant', 'debutants', 'initiation', 'shoshin'])
     has_deb_mot = any(m in texte_produits for m in MOTS_DEBUTANT)
     has_deb_excl = any(m in texte_produits for m in EXCLUSIONS_DEBUTANT)
     kw_is_debutant = has_deb_mot and not has_deb_excl
     is_debutant = cat_is_debutant or kw_is_debutant
 
-    # 3. ANALYSE KUMITE
-    cat_is_kumite = any(k in texte_categories for k in ['kumite', 'protection', 'combat'])
-    kw_is_kumite = any(m in texte_produits for m in MOTS_KUMITE)
-    is_kumite = cat_is_kumite or kw_is_kumite
-
-    # 4. ANALYSE ÉLITE
-    cat_is_elite = any(k in texte_categories for k in ['expert', 'master', 'wkf'])
-    has_elite_mot = any(m in texte_produits for m in MOTS_ELITE)
-    has_elite_excl = any(m in texte_produits for m in EXCLUSIONS_ELITE)
-    kw_is_elite = has_elite_mot and not has_elite_excl
-    is_elite = cat_is_elite or kw_is_elite
-
     return pd.Series({
+        'has_yoseikan': is_yoseikan,
+        'has_nanbudo': is_nanbudo,
+        'has_kobudo': is_kobudo,
+        'has_enfant': is_enfant,
         'has_kumite': is_kumite,
-        'has_elite': is_elite,
-        'has_debutant': is_debutant,
-        'has_enfant': is_enfant
+        'has_kata': is_kata,
+        'has_debutant': is_debutant
     })
 
 achats_par_client = df_trans.groupby('Email_Clean').apply(analyser_achats_client)
@@ -161,10 +157,9 @@ col_email_rfm = next((c for c in df_rfm.columns if 'email' in c.lower() or 'mail
 df_rfm['Email'] = df_rfm[col_email_rfm].astype(str).str.strip().str.lower()
 
 df = pd.merge(df_rfm, achats_par_client, left_on='Email', right_index=True, how='left')
-df['has_kumite'] = df['has_kumite'].fillna(False)
-df['has_elite'] = df['has_elite'].fillna(False)
-df['has_debutant'] = df['has_debutant'].fillna(False)
-df['has_enfant'] = df['has_enfant'].fillna(False)
+
+for col in ['has_yoseikan', 'has_nanbudo', 'has_kobudo', 'has_enfant', 'has_kumite', 'has_kata', 'has_debutant']:
+    df[col] = df[col].fillna(False)
 
 col_orders = next((c for c in df.columns if any(k in c.lower() for k in ['commandes', 'orders', 'frequence'])), None)
 col_amount = next((c for c in df.columns if any(k in c.lower() for k in ['montant', 'total', 'ca', 'valeur'])), None)
@@ -174,73 +169,61 @@ df['Frequence_Clean'] = pd.to_numeric(df[col_orders], errors='coerce').fillna(0)
 df['Montant_Clean'] = pd.to_numeric(df[col_amount], errors='coerce').fillna(0.0).astype(float) if col_amount else 0.0
 df['Recence_Clean'] = pd.to_numeric(df[col_recency], errors='coerce').fillna(999).astype(int) if col_recency else 999
 
-# --- 5. RÈGLES DE SEGMENTATION AVEC PRIORITÉ ENFANT SUR DÉBUTANT ---
+# --- 5. RÈGLES DE SEGMENTATION INDÉPENDANTES ET HIÉRARCHISATION ---
 def attribuer_segmentation(row):
     freq = row['Frequence_Clean']
     montant = row['Montant_Clean']
     recence = row['Recence_Clean']
 
-    # Clusters RFM
+    # 1. CALCUL DU LABEL RFM
     if freq == 0 or montant == 0:
-        cluster_id = 0
         rfm_label = "Prospect Non Converti"
     elif freq == 1 and recence <= 90:
-        cluster_id = 1
         rfm_label = "Nouveau Client Récent"
-    elif freq == 1 and recence > 90 and recence <= 240:
-        cluster_id = 2
+    elif freq == 1 and 90 < recence <= 240:
         rfm_label = "Client Occasionnel"
-    elif freq >= 2 and recence <= 180 and montant < 300:
-        cluster_id = 3
+    elif (freq >= 3 or montant >= 1000) and recence <= 365:
+        rfm_label = "Client VIP"
+    elif freq >= 2 and recence <= 240 and montant < 1000:
         rfm_label = "Client Régulier"
-    elif (freq >= 3 or montant >= 300) and recence <= 365:
-        cluster_id = 4
-        rfm_label = "Client VIP / Élite RFM"
     else:
-        cluster_id = 5
-        rfm_label = "Inactif / Risque d'Attrition"
+        rfm_label = "Inactif / Risque"
 
-    # Attribution du Tunnel Marketing (L'Enfant passe AVANT Débutant)
-    if row['has_kumite']:
-        tunnel = 'tunnel_kumite'
-        segment_metier = 'Passionné Kumite'
-    elif row['has_elite']:
-        tunnel = 'tunnel_elite_pro'
-        segment_metier = 'Expert / Élite Pro'
-    elif row['has_enfant']:  # PRIORITÉ ENFANT
-        tunnel = 'tunnel_enfant'
-        segment_metier = 'Équipement Enfant'
-    elif row['has_debutant']:  # DÉBUTANT (Si pas enfant)
-        tunnel = 'tunnel_debutant'
-        segment_metier = 'Initiation / Débutant'
-    elif cluster_id == 0:
-        tunnel = 'tunnel_prospect_sans_achat'
-        segment_metier = 'Prospect Non Converti'
-    elif cluster_id == 4:
-        tunnel = 'tunnel_elite_pro'
-        segment_metier = 'Client VIP'
-    elif cluster_id == 5:
-        tunnel = 'tunnel_defaut'
-        segment_metier = 'Client Inactif à Relancer'
+    # 2. CALCUL DE LA SPÉCIALITÉ UNIQUE (HIÉRARCHIE STRICTE)
+    if row['has_yoseikan']:
+        specialite = "Yoseikan Budo"
+    elif row['has_nanbudo']:
+        specialite = "Nanbudo"
+    elif row['has_kobudo']:
+        specialite = "Kobudo"
+    elif row['has_enfant']:
+        specialite = "Enfant"
+    elif row['has_kumite']:
+        specialite = "Kumite"
+    elif row['has_kata']:
+        specialite = "Kata"
+    elif row['has_debutant']:
+        specialite = "Débutant"
     else:
-        tunnel = 'tunnel_defaut'
-        segment_metier = rfm_label
+        specialite = "Général"
 
     return pd.Series({
-        'Deep_Cluster': cluster_id,
         'RFM_Label': rfm_label,
-        'Tunnel_Marketing': tunnel,
-        'Segment_Metier': segment_metier
+        'Specialite_Produit': specialite
     })
 
 res_seg = df.apply(attribuer_segmentation, axis=1)
-df['Deep_Cluster'] = res_seg['Deep_Cluster']
 df['RFM_Label'] = res_seg['RFM_Label']
-df['Tunnel_Marketing'] = res_seg['Tunnel_Marketing']
-df['Segment_Metier'] = res_seg['Segment_Metier']
+df['Specialite_Produit'] = res_seg['Specialite_Produit']
 
-# --- 6. SAUVEGARDE ---
-df.to_csv(chemin_sortie, index=False, encoding='utf-8')
-print(f"Fichier segmentation mis à jour : {chemin_sortie}")
-print("\n--- RÉPARTITION DES TUNNELS ---")
-print(df['Tunnel_Marketing'].value_counts())
+# --- 6. SAUVEGARDE STRICTE DES COLONNES UTILES ---
+# On conserve l'Email pour pouvoir faire la correspondance dans Brevo
+df_export = df[['Email', 'RFM_Label', 'Specialite_Produit']]
+
+df_export.to_csv(chemin_sortie, index=False, encoding='utf-8')
+
+print(f"Fichier de segmentation mis à jour : {chemin_sortie}")
+print("\n--- RÉPARTITION RFM ---")
+print(df_export['RFM_Label'].value_counts())
+print("\n--- RÉPARTITION SPÉCIALITÉS ---")
+print(df_export['Specialite_Produit'].value_counts())

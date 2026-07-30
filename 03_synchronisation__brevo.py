@@ -68,58 +68,34 @@ compteur_erreur = 0
 erreurs_consecutives = 0
 
 for idx, row in df_clients.iterrows():
-    email = str(row['Email']).strip() if not pd.isna(row['Email']) else ''
+    email = str(row['Email']).strip() if 'Email' in row and not pd.isna(row['Email']) else ''
 
     if email == '' or '@' not in email:
         compteur_erreur += 1
         continue
 
-    tunnel = (
-        str(row['Tunnel_Marketing']).strip()
-        if 'Tunnel_Marketing' in row and not pd.isna(row['Tunnel_Marketing'])
-        else ''
+    # Récupération des deux nouvelles attributs nettoyés
+    rfm_label = (
+        str(row['RFM_Label']).strip()
+        if 'RFM_Label' in row and not pd.isna(row['RFM_Label'])
+        else 'Inactif / Risque'
     )
-    segment = (
-        str(row['Segment_Metier']).strip()
-        if 'Segment_Metier' in row and not pd.isna(row['Segment_Metier'])
-        else ''
-    )
-    cluster = (
-        int(row['Deep_Cluster'])
-        if 'Deep_Cluster' in row and not pd.isna(row['Deep_Cluster'])
-        else -1
-    )
-
-    recence = (
-        int(row['Recence_Clean'])
-        if 'Recence_Clean' in row and not pd.isna(row['Recence_Clean'])
-        else 999
-    )
-    frequence = (
-        int(row['Frequence_Clean'])
-        if 'Frequence_Clean' in row and not pd.isna(row['Frequence_Clean'])
-        else 0
-    )
-    montant = (
-        float(row['Montant_Clean'])
-        if 'Montant_Clean' in row and not pd.isna(row['Montant_Clean'])
-        else 0.0
+    specialite_produit = (
+        str(row['Specialite_Produit']).strip()
+        if 'Specialite_Produit' in row and not pd.isna(row['Specialite_Produit'])
+        else 'Général'
     )
 
     attributes = {
-        'TUNNEL_MARKETING': tunnel,
-        'SEGMENT_METIER': segment,
-        'CLUSTER_ID': cluster,
-        'RECENCE': recence,
-        'FREQUENCE': frequence,
-        'MONTANT': montant,
+        'RFM_LABEL': rfm_label,
+        'SPECIALITE_PRODUIT': specialite_produit,
     }
 
-    # CORRECTIF TEMPORAIRE : Réinscription automatique de tous les contacts touchés
+    # Création ou mise à jour du contact dans Brevo
     create_contact = sib_api_v3_sdk.CreateContact(
         email=email,
         attributes=attributes,
-        email_blacklisted=False,  # CORRIGE ET RÉABONNE AUTOMATIQUEMENT
+        email_blacklisted=False,  # Permet la réinscription / mise à jour automatique
         update_enabled=True
     )
 
@@ -143,7 +119,7 @@ for idx, row in df_clients.iterrows():
                 '\n ERREUR CRITIQUE : 5 échecs consécutifs d\'authentification'
                 ' (Unauthorized).'
             )
-            print('Arret du script pour éviter de boucler inutilement.')
+            print('Arrêt du script pour éviter de boucler inutilement.')
             sys.exit(1)
 
     time.sleep(0.05)

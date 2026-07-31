@@ -177,6 +177,10 @@ def analyser_achats_client(df_group):
     })
 achats_par_client = df_trans.groupby('Email_Clean').apply(analyser_achats_client)
 
+# Ligne de diagnostic rapide
+print("ÉCHANTILLON D'ANALYSE TEXTE :")
+print(df_trans[['Produit_Clean', 'Product_Cat_Clean', 'Categorie_Clean']].head(10))
+
 # --- 4. PREPARATION RFM ET FUSION ---
 col_email_rfm = next((c for c in df_rfm.columns if 'email' in c.lower() or 'mail' in c.lower()), df_rfm.columns[0])
 df_rfm['Email'] = df_rfm[col_email_rfm].astype(str).str.strip().str.lower()

@@ -119,6 +119,7 @@ MOTS_ENFANT = [
     'minime', 'taille enfant', 'kimono enfant', '100cm', '110cm', '120cm', '130cm', '140cm', '150cm'
 ]
 
+# Remplacer la logique d'analyse dans analyser_achats_client par :
 def analyser_achats_client(df_group):
     is_yoseikan = False
     is_nanbudo = False
@@ -129,56 +130,21 @@ def analyser_achats_client(df_group):
     is_debutant = False
 
     for _, row in df_group.iterrows():
-        p_cat = str(row.get('Product_Cat_Clean', ''))
-        p_name = str(row.get('Produit_Clean', ''))
-        c_clean = str(row.get('Categorie_Clean', ''))
+        # Combiner toutes les informations textuelles disponibles pour ce produit
+        texte_complet = f"{row.get('Product_Cat_Clean', '')} {row.get('Produit_Clean', '')} {row.get('Categorie_Clean', '')}".lower()
 
-        # 1. Recherche prioritaire dans product_cat
-        found_in_prod_cat = False
+        if 'yoseikan' in texte_complet: is_yoseikan = True
+        if 'nanbudo' in texte_complet: is_nanbudo = True
+        if 'kobudo' in texte_complet: is_kobudo = True
 
-        if 'yoseikan' in p_cat:
-            is_yoseikan = True
-            found_in_prod_cat = True
-        if 'nanbudo' in p_cat:
-            is_nanbudo = True
-            found_in_prod_cat = True
-        if 'kobudo' in p_cat:
-            is_kobudo = True
-            found_in_prod_cat = True
-        if 'enfants' in p_cat or 'enfant' in p_cat:
-            is_enfant = True
-            found_in_prod_cat = True
-        if 'kumite' in p_cat:
-            is_kumite = True
-            found_in_prod_cat = True
-        if 'kata' in p_cat:
+        if any(m in texte_complet for m in MOTS_ENFANT): is_enfant = True
+        if any(m in texte_complet for m in MOTS_KUMITE): is_kumite = True
+
+        if any(m in texte_complet for m in MOTS_KATA) and not any(m in texte_complet for m in EXCLUSIONS_KATA):
             is_kata = True
-            found_in_prod_cat = True
-        if 'debutants' in p_cat or 'debutant' in p_cat:
+
+        if any(m in texte_complet for m in MOTS_DEBUTANT) and not any(m in texte_complet for m in EXCLUSIONS_DEBUTANT):
             is_debutant = True
-            found_in_prod_cat = True
-
-        # 2. Si aucune classification trouvée dans product_cat, recherche par mots-clés (post_name / Categorie_Clean)
-        if not found_in_prod_cat:
-            if 'yoseikan' in c_clean or 'yoseikan' in p_name: is_yoseikan = True
-            if 'nanbudo' in c_clean or 'nanbudo' in p_name: is_nanbudo = True
-            if 'kobudo' in c_clean or 'kobudo' in p_name: is_kobudo = True
-
-            if any(k in c_clean for k in ['enfant', 'enfants', 'junior', 'kodomo']) or any(m in p_name for m in MOTS_ENFANT):
-                is_enfant = True
-
-            if any(k in c_clean for k in ['kumite', 'protection', 'combat']) or any(m in p_name for m in MOTS_KUMITE):
-                is_kumite = True
-
-            if any(k in c_clean for k in ['expert', 'master', 'wkf', 'kata']):
-                is_kata = True
-            elif any(m in p_name for m in MOTS_KATA) and not any(m in p_name for m in EXCLUSIONS_KATA):
-                is_kata = True
-
-            if any(k in c_clean for k in ['debutant', 'debutants', 'initiation', 'shoshin']):
-                is_debutant = True
-            elif any(m in p_name for m in MOTS_DEBUTANT) and not any(m in p_name for m in EXCLUSIONS_DEBUTANT):
-                is_debutant = True
 
     return pd.Series({
         'has_yoseikan': is_yoseikan,
@@ -189,12 +155,14 @@ def analyser_achats_client(df_group):
         'has_kata': is_kata,
         'has_debutant': is_debutant
     })
-
 achats_par_client = df_trans.groupby('Email_Clean').apply(analyser_achats_client)
 
 # --- 4. PREPARATION RFM ET FUSION ---
 col_email_rfm = next((c for c in df_rfm.columns if 'email' in c.lower() or 'mail' in c.lower()), df_rfm.columns[0])
 df_rfm['Email'] = df_rfm[col_email_rfm].astype(str).str.strip().str.lower()
+
+# S'assurer que l'index de 'achats_par_client' est aussi propre
+achats_par_client.index = achats_par_client.index.astype(str).str.strip().str.lower()
 
 df = pd.merge(df_rfm, achats_par_client, left_on='Email', right_index=True, how='left')
 
@@ -266,3 +234,5 @@ print("\n--- RÉPARTITION RFM ---")
 print(df_export['RFM_Label'].value_counts())
 print("\n--- RÉPARTITION SPÉCIALITÉS ---")
 print(df_export['Specialite_Produit'].value_counts())
+print("\n=== DIAGNOSTIC AVANT EXPORT ===")
+print(df['Specialite_Produit'].value_counts())

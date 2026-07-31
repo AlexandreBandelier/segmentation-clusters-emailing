@@ -130,21 +130,41 @@ def analyser_achats_client(df_group):
     is_debutant = False
 
     for _, row in df_group.iterrows():
-        # Combiner toutes les informations textuelles disponibles pour ce produit
-        texte_complet = f"{row.get('Product_Cat_Clean', '')} {row.get('Produit_Clean', '')} {row.get('Categorie_Clean', '')}".lower()
+        # 1. Extraction et nettoyage de tous les textes disponibles
+        p_cat = str(row.get('Product_Cat_Clean', ''))
+        p_name = str(row.get('Produit_Clean', ''))
+        c_clean = str(row.get('Categorie_Clean', ''))
 
-        if 'yoseikan' in texte_complet: is_yoseikan = True
-        if 'nanbudo' in texte_complet: is_nanbudo = True
-        if 'kobudo' in texte_complet: is_kobudo = True
+        # Découpage des catégories séparées par des virgules
+        categories_decoupees = [cat.strip().lower() for cat in p_cat.split(',')]
+        categories_secondaires = [cat.strip().lower() for cat in c_clean.split(',')]
+        
+        # On fusionne tout en un grand ensemble de mots/phrases nettoyés
+        tous_les_textes = categories_decoupees + categories_secondaires + [p_name.lower()]
+        texte_brut_combine = " ".join(tous_les_textes)
 
-        if any(m in texte_complet for m in MOTS_ENFANT): is_enfant = True
-        if any(m in texte_complet for m in MOTS_KUMITE): is_kumite = True
+        # 2. VÉRIFICATION ENFANT (Priorité Mots-Clés + Tailles)
+        if any(m in texte_brut_combine for m in MOTS_ENFANT):
+            is_enfant = True
 
-        if any(m in texte_complet for m in MOTS_KATA) and not any(m in texte_complet for m in EXCLUSIONS_KATA):
-            is_kata = True
+        # 3. VÉRIFICATION KUMITE / COMBAT
+        if any(m in texte_brut_combine for m in MOTS_KUMITE):
+            is_kumite = True
 
-        if any(m in texte_complet for m in MOTS_DEBUTANT) and not any(m in texte_complet for m in EXCLUSIONS_DEBUTANT):
-            is_debutant = True
+        # 4. VÉRIFICATION KATA (avec exclusions)
+        if any(m in texte_brut_combine for m in MOTS_KATA):
+            if not any(ex in texte_brut_combine for ex in EXCLUSIONS_KATA):
+                is_kata = True
+
+        # 5. VÉRIFICATION DÉBUTANT (avec exclusions)
+        if any(m in texte_brut_combine for m in MOTS_DEBUTANT):
+            if not any(ex in texte_brut_combine for ex in EXCLUSIONS_DEBUTANT):
+                is_debutant = True
+
+        # 6. DISCIPLINES SPÉCIFIQUES
+        if 'yoseikan' in texte_brut_combine: is_yoseikan = True
+        if 'nanbudo' in texte_brut_combine: is_nanbudo = True
+        if 'kobudo' in texte_brut_combine: is_kobudo = True
 
     return pd.Series({
         'has_yoseikan': is_yoseikan,

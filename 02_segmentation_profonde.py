@@ -47,20 +47,20 @@ def normaliser_texte(texte):
     texte = unicodedata.normalize('NFD', texte).encode('ascii', 'ignore').decode('utf-8')
     return texte
 
-# Détection dynamique des colonnes Produit, Catégorie et Email dans df_trans
-col_prod_trans = next((c for c in df_trans.columns if any(k in c.lower() for k in ['nom', 'produit', 'item', 'lineitem'])), df_trans.columns[0])
-col_cat_trans = next((c for c in df_trans.columns if any(k in c.lower() for k in ['categorie', 'category', 'cat'])), None)
-col_email_trans = next((c for c in df_trans.columns if 'email' in c.lower() or 'mail' in c.lower()), df_trans.columns[0])
+# Mapping exact des colonnes
+col_email_trans = "E-mail (Facturation)"
+col_prod_trans = next((c for c in df_trans.columns if c.strip().startswith("Nom de l’élément") or c.strip().startswith("Nom de l'élément")), None)
 
+col_prod_name_prod = "post_title"
+col_prod_cat_prod = "product_cat"
+
+# Traitement du fichier Commandes
 df_trans['Email_Clean'] = df_trans[col_email_trans].astype(str).str.strip().str.lower()
-df_trans['Produit_Clean'] = df_trans[col_prod_trans].apply(normaliser_texte)
-df_trans['Categorie_Clean'] = df_trans[col_cat_trans].apply(normaliser_texte) if col_cat_trans else ""
+df_trans['Produit_Clean'] = df_trans[col_prod_trans].apply(normaliser_texte) if col_prod_trans else ""
+df_trans['Categorie_Clean'] = ""
 
-# Détection et jointure de la colonne product_cat issue du fichier export_produits_KGI.csv
-col_prod_cat_prod = next((c for c in df_prod.columns if 'product_cat' in c.lower() or 'cat' in c.lower()), None)
-col_prod_name_prod = next((c for c in df_prod.columns if any(k in c.lower() for k in ['post_name', 'nom', 'produit', 'title', 'item', 'id'])), df_prod.columns[0])
-
-if col_prod_cat_prod:
+# Traitement du fichier Produits et Jointure
+if col_prod_cat_prod in df_prod.columns and col_prod_name_prod in df_prod.columns:
     df_prod['Produit_Clean_Match'] = df_prod[col_prod_name_prod].apply(normaliser_texte)
     df_prod['Product_Cat_Clean'] = df_prod[col_prod_cat_prod].apply(normaliser_texte)
     

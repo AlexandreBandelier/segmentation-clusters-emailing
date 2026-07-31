@@ -38,15 +38,16 @@ def charger_fichier(chemin):
 
 df_rfm = charger_fichier(chemin_rfm)
 df_trans = charger_fichier(chemin_transactions)
+df_prod = charger_fichier(chemin_produits)
 
-# --- 2. NETTOYAGE STRICT ET EXTRACTION CATÉGORIE / PRODUIT ---
+# --- 2. NETTOYAGE STRICT ET CROISEMENT AVEC EXPORT PRODUITS ---
 def normaliser_texte(texte):
     if pd.isna(texte): return ""
     texte = str(texte).lower()
     texte = unicodedata.normalize('NFD', texte).encode('ascii', 'ignore').decode('utf-8')
     return texte
 
-# Détection dynamique des colonnes Produit, Catégorie et Email
+# Détection dynamique des colonnes Produit, Catégorie et Email dans df_trans
 col_prod_trans = next((c for c in df_trans.columns if any(k in c.lower() for k in ['nom', 'produit', 'item', 'lineitem'])), df_trans.columns[0])
 col_cat_trans = next((c for c in df_trans.columns if any(k in c.lower() for k in ['categorie', 'category', 'cat'])), None)
 col_email_trans = next((c for c in df_trans.columns if 'email' in c.lower() or 'mail' in c.lower()), df_trans.columns[0])
@@ -54,6 +55,20 @@ col_email_trans = next((c for c in df_trans.columns if 'email' in c.lower() or '
 df_trans['Email_Clean'] = df_trans[col_email_trans].astype(str).str.strip().str.lower()
 df_trans['Produit_Clean'] = df_trans[col_prod_trans].apply(normaliser_texte)
 df_trans['Categorie_Clean'] = df_trans[col_cat_trans].apply(normaliser_texte) if col_cat_trans else ""
+
+# Détection et jointure de la colonne product_cat issue du fichier export_produits_KGI.csv
+col_prod_cat_prod = next((c for c in df_prod.columns if 'product_cat' in c.lower() or 'cat' in c.lower()), None)
+col_prod_name_prod = next((c for c in df_prod.columns if any(k in c.lower() for k in ['post_name', 'nom', 'produit', 'title', 'item', 'id'])), df_prod.columns[0])
+
+if col_prod_cat_prod:
+    df_prod['Produit_Clean_Match'] = df_prod[col_prod_name_prod].apply(normaliser_texte)
+    df_prod['Product_Cat_Clean'] = df_prod[col_prod_cat_prod].apply(normaliser_texte)
+    
+    df_prod_unique = df_prod[['Produit_Clean_Match', 'Product_Cat_Clean']].drop_duplicates(subset=['Produit_Clean_Match'])
+    df_trans = pd.merge(df_trans, df_prod_unique, left_on='Produit_Clean', right_on='Produit_Clean_Match', how='left')
+    df_trans['Product_Cat_Clean'] = df_trans['Product_Cat_Clean'].fillna("")
+else:
+    df_trans['Product_Cat_Clean'] = ""
 
 # --- 3. DÉTECTION DES PRODUITS ET CATÉGORIES (SANS ACCENTS) ---
 
@@ -105,40 +120,65 @@ MOTS_ENFANT = [
 ]
 
 def analyser_achats_client(df_group):
-    produits_liste = df_group['Produit_Clean'].tolist()
-    categories_liste = df_group['Categorie_Clean'].tolist()
-    
-    texte_produits = " ".join(produits_liste)
-    texte_categories = " ".join(categories_liste)
+    is_yoseikan = False
+    is_nanbudo = False
+    is_kobudo = False
+    is_enfant = False
+    is_kumite = False
+    is_kata = False
+    is_debutant = False
 
-    # Détection des catégories spécifiques d'arts martiaux
-    is_yoseikan = 'yoseikan' in texte_categories or 'yoseikan' in texte_produits
-    is_nanbudo = 'nanbudo' in texte_categories or 'nanbudo' in texte_produits
-    is_kobudo = 'kobudo' in texte_categories or 'kobudo' in texte_produits
+    for _, row in df_group.iterrows():
+        p_cat = str(row.get('Product_Cat_Clean', ''))
+        p_name = str(row.get('Produit_Clean', ''))
+        c_clean = str(row.get('Categorie_Clean', ''))
 
-    # Détection Enfant
-    cat_is_enfant = any(k in texte_categories for k in ['enfant', 'enfants', 'junior', 'kodomo'])
-    kw_is_enfant = any(m in texte_produits for m in MOTS_ENFANT)
-    is_enfant = cat_is_enfant or kw_is_enfant
+        # 1. Recherche prioritaire dans product_cat
+        found_in_prod_cat = False
 
-    # Détection Kumite
-    cat_is_kumite = any(k in texte_categories for k in ['kumite', 'protection', 'combat'])
-    kw_is_kumite = any(m in texte_produits for m in MOTS_KUMITE)
-    is_kumite = cat_is_kumite or kw_is_kumite
+        if 'yoseikan' in p_cat:
+            is_yoseikan = True
+            found_in_prod_cat = True
+        if 'nanbudo' in p_cat:
+            is_nanbudo = True
+            found_in_prod_cat = True
+        if 'kobudo' in p_cat:
+            is_kobudo = True
+            found_in_prod_cat = True
+        if 'enfants' in p_cat or 'enfant' in p_cat:
+            is_enfant = True
+            found_in_prod_cat = True
+        if 'kumite' in p_cat:
+            is_kumite = True
+            found_in_prod_cat = True
+        if 'kata' in p_cat:
+            is_kata = True
+            found_in_prod_cat = True
+        if 'debutants' in p_cat or 'debutant' in p_cat:
+            is_debutant = True
+            found_in_prod_cat = True
 
-    # Détection Kata
-    cat_is_kata = any(k in texte_categories for k in ['expert', 'master', 'wkf', 'kata'])
-    has_kata_mot = any(m in texte_produits for m in MOTS_KATA)
-    has_kata_excl = any(m in texte_produits for m in EXCLUSIONS_KATA)
-    kw_is_kata = has_kata_mot and not has_kata_excl
-    is_kata = cat_is_kata or kw_is_kata
+        # 2. Si aucune classification trouvée dans product_cat, recherche par mots-clés (post_name / Categorie_Clean)
+        if not found_in_prod_cat:
+            if 'yoseikan' in c_clean or 'yoseikan' in p_name: is_yoseikan = True
+            if 'nanbudo' in c_clean or 'nanbudo' in p_name: is_nanbudo = True
+            if 'kobudo' in c_clean or 'kobudo' in p_name: is_kobudo = True
 
-    # Détection Débutant
-    cat_is_debutant = any(k in texte_categories for k in ['debutant', 'debutants', 'initiation', 'shoshin'])
-    has_deb_mot = any(m in texte_produits for m in MOTS_DEBUTANT)
-    has_deb_excl = any(m in texte_produits for m in EXCLUSIONS_DEBUTANT)
-    kw_is_debutant = has_deb_mot and not has_deb_excl
-    is_debutant = cat_is_debutant or kw_is_debutant
+            if any(k in c_clean for k in ['enfant', 'enfants', 'junior', 'kodomo']) or any(m in p_name for m in MOTS_ENFANT):
+                is_enfant = True
+
+            if any(k in c_clean for k in ['kumite', 'protection', 'combat']) or any(m in p_name for m in MOTS_KUMITE):
+                is_kumite = True
+
+            if any(k in c_clean for k in ['expert', 'master', 'wkf', 'kata']):
+                is_kata = True
+            elif any(m in p_name for m in MOTS_KATA) and not any(m in p_name for m in EXCLUSIONS_KATA):
+                is_kata = True
+
+            if any(k in c_clean for k in ['debutant', 'debutants', 'initiation', 'shoshin']):
+                is_debutant = True
+            elif any(m in p_name for m in MOTS_DEBUTANT) and not any(m in p_name for m in EXCLUSIONS_DEBUTANT):
+                is_debutant = True
 
     return pd.Series({
         'has_yoseikan': is_yoseikan,
@@ -175,8 +215,8 @@ def attribuer_segmentation(row):
     montant = row['Montant_Clean']
     recence = row['Recence_Clean']
 
-    # 1. CALCUL DU LABEL RFM
-    if freq == 0 or montant == 0:
+    # 1. CALCUL DU LABEL RFM (Strictement freq == 0 pour Prospect Non Converti)
+    if freq == 0:
         rfm_label = "Prospect Non Converti"
     elif freq == 1 and recence <= 90:
         rfm_label = "Nouveau Client Récent"
@@ -189,7 +229,7 @@ def attribuer_segmentation(row):
     else:
         rfm_label = "Inactif / Risque"
 
-    # 2. CALCUL DE LA SPÉCIALITÉ UNIQUE (HIÉRARCHIE STRICTE)
+    # 2. CALCUL DE LA SPÉCIALITÉ UNIQUE (HIÉRARCHIE STRICTE - Général tout en bas)
     if row['has_yoseikan']:
         specialite = "Yoseikan Budo"
     elif row['has_nanbudo']:
@@ -217,7 +257,6 @@ df['RFM_Label'] = res_seg['RFM_Label']
 df['Specialite_Produit'] = res_seg['Specialite_Produit']
 
 # --- 6. SAUVEGARDE STRICTE DES COLONNES UTILES ---
-# On conserve l'Email pour pouvoir faire la correspondance dans Brevo
 df_export = df[['Email', 'RFM_Label', 'Specialite_Produit']]
 
 df_export.to_csv(chemin_sortie, index=False, encoding='utf-8')

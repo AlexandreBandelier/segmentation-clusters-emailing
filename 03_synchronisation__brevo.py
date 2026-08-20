@@ -41,34 +41,35 @@ configuration = sib_api_v3_sdk.Configuration()
 configuration.api_key['api-key'] = CLE_API_BREVO
 api_instance = sib_api_v3_sdk.ContactsApi(sib_api_v3_sdk.ApiClient(configuration))
 
-# --- 2. CHARGEMENT ET PRÉPARATION VECTORISÉE DES DONNÉES (OPTIMISATION 1) ---
-print("Étape 2 : Chargement et préparation vectorisée du fichier de segmentation...")
+# --- 2. CHARGEMENT ET PRÉPARATION DES DONNÉES ---
+print("Étape 2 : Chargement et préparation du fichier de segmentation...")
 df = pd.read_csv(chemin_entree, low_memory=False)
 
 if 'Email' not in df.columns:
     raise KeyError("Erreur : La colonne 'Email' est absente du fichier d'entrée.")
 
-# Nettoyage et filtrage vectorisé rapide
+# Nettoyage
 df['email'] = df['Email'].astype(str).str.strip().str.lower()
 df = df[df['email'].str.contains(r'^[^@]+@[^@]+\.[^@]+$', regex=True, na=False)].copy()
 
-# Normalisation vectorisée des 4 attributs
 df['rfm_label'] = df['RFM_Label'].fillna('Inactif / Risque').astype(str).str.strip() if 'RFM_Label' in df.columns else 'Inactif / Risque'
 df['specialite'] = df['Specialite_Produit'].fillna('Général').astype(str).str.strip() if 'Specialite_Produit' in df.columns else 'Général'
 df['pays'] = df['Pays'].fillna('FR').astype(str).str.strip().str.upper() if 'Pays' in df.columns else 'FR'
 df['langue'] = df['Langue'].fillna('fr').astype(str).str.strip().str.lower() if 'Langue' in df.columns else 'fr'
 
-# Construction ultra-rapide des payloads de contacts
-df['attributes'] = df.apply(
-    lambda r: {
-        'RFM_LABEL': r['rfm_label'],
-        'SPECIALITE_PRODUIT': r['specialite'],
-        'PAYS': r['pays'],
-        'LANGUE': r['langue']
-    }, axis=1
-)
+# Structure conforme attendue par l'API importContacts de Brevo
+contacts_payload = []
+for _, r in df.iterrows():
+    contacts_payload.append({
+        "email": r['email'],
+        "attributes": {
+            "RFM_LABEL": r['rfm_label'],
+            "SPECIALITE_PRODUIT": r['specialite'],
+            "PAYS": r['pays'],
+            "LANGUE": r['langue']
+        }
+    })
 
-contacts_payload = df[['email', 'attributes']].to_dict(orient='records')
 total_contacts = len(contacts_payload)
 print(f"-> {total_contacts} contacts valides préparés pour la synchronisation.")
 

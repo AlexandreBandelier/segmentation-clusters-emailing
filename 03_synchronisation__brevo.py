@@ -23,7 +23,6 @@ if not os.path.exists(chemin_entree):
     )
 
 CLE_API_BREVO = os.getenv('BREVO_API_KEY')
-
 if not CLE_API_BREVO:
     raise ValueError(
         "Erreur : La variable 'BREVO_API_KEY' est introuvable (ni dans le .env, ni dans les Secrets GitHub)."
@@ -41,14 +40,14 @@ configuration = sib_api_v3_sdk.Configuration()
 configuration.api_key['api-key'] = CLE_API_BREVO
 api_instance = sib_api_v3_sdk.ContactsApi(sib_api_v3_sdk.ApiClient(configuration))
 
-# --- 2. CHARGEMENT ET PRÉPARATION DES DONNÉES ---
-print("Étape 2 : Chargement et préparation du fichier de segmentation...")
+# --- 2. CHARGEMENT ET NETTOYAGE DES DONNÉES ---
+print("Étape 2 : Chargement du fichier de segmentation frais...")
 df = pd.read_csv(chemin_entree, low_memory=False)
 
 if 'Email' not in df.columns:
-    raise KeyError("Erreur : La colonne 'Email' est absente du fichier d'entrée.")
+    raise KeyError("Erreur : La colonne 'Email' est absente du fichier CSV.")
 
-# Nettoyage
+# Filtrage et normalisation
 df['email'] = df['Email'].astype(str).str.strip().str.lower()
 df = df[df['email'].str.contains(r'^[^@]+@[^@]+\.[^@]+$', regex=True, na=False)].copy()
 
@@ -57,66 +56,48 @@ df['specialite'] = df['Specialite_Produit'].fillna('Général').astype(str).str.
 df['pays'] = df['Pays'].fillna('FR').astype(str).str.strip().str.upper() if 'Pays' in df.columns else 'FR'
 df['langue'] = df['Langue'].fillna('fr').astype(str).str.strip().str.lower() if 'Langue' in df.columns else 'fr'
 
-# Structure conforme attendue par l'API importContacts de Brevo
-contacts_payload = []
-for _, r in df.iterrows():
-    contacts_payload.append({
-        "email": r['email'],
-        "attributes": {
-            "RFM_LABEL": r['rfm_label'],
-            "SPECIALITE_PRODUIT": r['specialite'],
-            "PAYS": r['pays'],
-            "LANGUE": r['langue']
-        }
-    })
+total_contacts = len(df)
+print(f"-> {total_contacts} contacts valides préparés.")
 
-total_contacts = len(contacts_payload)
-print(f"-> {total_contacts} contacts valides préparés pour la synchronisation.")
-
-# --- 3. SYNCHRONISATION PAR LOTS AVEC RETRY & BACKOFF (OPTIMISATIONS 2 & 3) ---
-print("\nÉtape 3 : Lancement de la synchronisation globale par lots (Batch Import)...")
-
-TAILLE_LOT = 250   # Taille optimale par lot pour Brevo API
-MAX_RETRIES = 3    # Nombre de réessais en cas d'erreur temporaire
-
+# --- 3. SYNCHRONISATION VERS BREVO ---
+print("\nÉtape 3 : Lancement de la synchronisation globale vers Brevo...")
 compteur_succes = 0
 compteur_erreur = 0
+erreurs_consecutives = 0
 
-for i in range(0, total_contacts, TAILLE_LOT):
-    batch = contacts_payload[i:i + TAILLE_LOT]
-    num_lot = (i // TAILLE_LOT) + 1
-    total_lots = (total_contacts + TAILLE_LOT - 1) // TAILLE_LOT
+for idx, row in df.iterrows():
+    attributes = {
+        'RFM_LABEL': row['rfm_label'],
+        'SPECIALITE_PRODUIT': row['specialite'],
+        'PAYS': row['pays'],
+        'LANGUE': row['langue'],
+    }
 
-    request_import = sib_api_v3_sdk.RequestContactImport(
-        json_body=batch,
-        update_existing_contacts=True
+    create_contact = sib_api_v3_sdk.CreateContact(
+        email=row['email'],
+        attributes=attributes,
+        email_blacklisted=False,
+        update_enabled=True
     )
 
-    succes = False
-    for tentative in range(1, MAX_RETRIES + 1):
-        try:
-            api_instance.import_contacts(request_import)
-            compteur_succes += len(batch)
-            succes = True
-            print(f"[+] Lot {num_lot}/{total_lots} synchronisé ({min(i + TAILLE_LOT, total_contacts)}/{total_contacts} contacts).")
-            break
-        except ApiException as e:
-            # Interruption immédiate sur clé invalide ou permissions insuffisantes
-            if e.status in [401, 403]:
-                print(f"\n[!] ERREUR CRITIQUE AUTHENTIFICATION ({e.status}) : Clé API invalide ou permissions insuffisantes.")
-                sys.exit(1)
-            
-            print(f"[!] Avertissement sur Lot {num_lot}/{total_lots} (Tentative {tentative}/{MAX_RETRIES}) - Erreur {e.status} : {e.reason}")
-            if tentative < MAX_RETRIES:
-                temps_attente = 2 ** tentative  # Reprise exponentielle (2s, 4s, etc.)
-                time.sleep(temps_attente)
+    try:
+        api_instance.create_contact(create_contact)
+        compteur_succes += 1
+        erreurs_consecutives = 0
+        if (idx + 1) % 500 == 0 or (idx + 1) == total_contacts:
+            print(f"[+] Progression : {idx+1}/{total_contacts} contacts traités.")
+    except ApiException as e:
+        compteur_erreur += 1
+        erreurs_consecutives += 1
+        print(f"[!] Erreur API Brevo pour {row['email']} (Ligne {idx+1}) : {e.status} - {e.reason}")
+        print(f"DÉTAIL BREVO : {e.body}")
 
-    if not succes:
-        print(f"ÉCHEC DÉFINITIF pour le lot {num_lot} ({len(batch)} contacts ignorés).")
-        compteur_erreur += len(batch)
+        if e.status in [401, 403] or erreurs_consecutives >= 5:
+            print("\nERREUR CRITIQUE : Arrêt du script suite à des erreurs répétées d'authentification ou d'API.")
+            sys.exit(1)
 
-    time.sleep(0.1)
+    time.sleep(0.02)  # Pause pour respecter la limite de débit
 
 print('\n' + '=' * 50)
-print(f'SYNCHRONISATION TERMINÉE : {compteur_succes} contacts mis à jour / {compteur_erreur} échecs')
+print(f'SYNCHRONISATION TERMINÉE : {compteur_succes} mis à jour / {compteur_erreur} erreurs')
 print('=' * 50)
